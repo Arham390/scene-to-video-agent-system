@@ -6,3 +6,4 @@ python-dotenv
 faiss-cpu
 numpy
 requests
+opencv-python-headless
