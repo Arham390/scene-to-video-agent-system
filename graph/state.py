@@ -21,7 +21,7 @@ class AgentState(TypedDict):
     face_swapped: Annotated[list[dict], operator.add]
     final_videos: Annotated[list[dict], operator.add]
     
-    error: str
+    error: Annotated[list[str], operator.add]
 
 def get_initial_state(manifest_path: str) -> AgentState:
     import json
@@ -36,5 +36,5 @@ def get_initial_state(manifest_path: str) -> AgentState:
         "video_tracks": [],
         "face_swapped": [],
         "final_videos": [],
-        "error": ""
+        "error": []
     }

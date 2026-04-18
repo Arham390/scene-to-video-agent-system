@@ -75,12 +75,12 @@ def build_workflow():
     # We must explicitly map video_gen_node to face_swap.
     # Since video_gen_node returns dict that reduces into state, we can add a conditional edge from video_gen_node or a dummy sync node.
     
-    graph.add_node("sync_video_node", lambda state: state) # Dummy to wait for video
+    graph.add_node("sync_video_node", lambda state: {"error": []}) # Dummy to wait for video
     graph.add_edge("video_gen_node", "sync_video_node")
     graph.add_conditional_edges("sync_video_node", route_video_to_face_swap, ["face_swap_node"])
     
     # Fan in: wait for face swap & voice to finish, then lip sync
-    graph.add_node("pre_lip_sync_node", lambda state: state)
+    graph.add_node("pre_lip_sync_node", lambda state: {"error": []})
     graph.add_edge("voice_synth_node", "pre_lip_sync_node")
     graph.add_edge("face_swap_node", "pre_lip_sync_node")
     

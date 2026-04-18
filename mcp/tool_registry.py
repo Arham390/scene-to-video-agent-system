@@ -96,7 +96,7 @@ class ToolRegistry:
         """Call HF explicitly for text-to-speech."""
         try:
             client = InferenceClient(api_key=config.hf_api_token)
-            audio = client.text_to_audio(text, model="facebook/mms-tts-eng")
+            audio = client.text_to_speech(text, model="facebook/mms-tts-eng")
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(audio)

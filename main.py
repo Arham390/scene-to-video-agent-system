@@ -22,7 +22,7 @@ def main():
     os.makedirs(config.faiss_index_path, exist_ok=True)
 
     print("\n" + "="*60)
-    print("  🎬 PROJECT MONTAGE — The Studio Floor (Phase 2)")
+    print("  === PROJECT MONTAGE - The Studio Floor (Phase 2)")
     print("="*60)
     print(f"  Manifest  : {args.manifest}")
     print("="*60 + "\n")
@@ -33,7 +33,7 @@ def main():
         final_state = workflow.invoke(initial_state)
         
         print("\n" + "="*60)
-        print("  ✅ AUDIOVISUAL GENERATION COMPLETE")
+        print("  === AUDIOVISUAL GENERATION COMPLETE")
         print("="*60)
         final_vids = final_state.get("final_videos", [])
         print(f"  Generated Videos : {len(final_vids)}")
