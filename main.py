@@ -18,6 +18,10 @@ def main():
         print(f"[ERROR] Manifest not found: {args.manifest}")
         sys.exit(1)
 
+    # Clean raw_scenes from previous runs to avoid stale file pollution
+    import shutil
+    if os.path.exists(config.raw_scenes_dir):
+        shutil.rmtree(config.raw_scenes_dir)
     os.makedirs(config.raw_scenes_dir, exist_ok=True)
     os.makedirs(config.faiss_index_path, exist_ok=True)
 

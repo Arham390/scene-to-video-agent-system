@@ -104,24 +104,105 @@ class ToolRegistry:
         return "[MEMORY] Committed"
 
     def _voice_cloning_synthesizer(self, character: str, text: str, output_path: str) -> str:
-        """Call HF explicitly for text-to-speech."""
+        """Generate speech audio — tries HF TTS first, then gTTS, then silent WAV fallback."""
+        import wave
+
+        MIN_DURATION_SECS = 3  # All audio files must be at least 3 seconds
+
+        def _ensure_wav_min_duration(wav_path: str, min_secs: int = MIN_DURATION_SECS):
+            """Pad a WAV file with silence to reach min_secs if needed."""
+            try:
+                with wave.open(wav_path, 'r') as wf:
+                    rate = wf.getframerate()
+                    frames = wf.getnframes()
+                    channels = wf.getnchannels()
+                    sampwidth = wf.getsampwidth()
+                    duration = frames / rate
+                    raw = wf.readframes(frames)
+                # Pad if shorter than minimum
+                if duration < min_secs:
+                    extra_frames = int((min_secs - duration) * rate)
+                    padding = b"\x00" * (extra_frames * channels * sampwidth)
+                    tmp = wav_path + ".tmp.wav"
+                    with wave.open(tmp, 'wb') as wout:
+                        wout.setnchannels(channels)
+                        wout.setsampwidth(sampwidth)
+                        wout.setframerate(rate)
+                        wout.writeframes(raw + padding)
+                    import os as _os; _os.replace(tmp, wav_path)
+            except Exception as e:
+                print(f"  [Voice Synth] Could not pad: {e}")
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # --- Try 1: HF Inference API ---
         try:
             client = InferenceClient(api_key=config.hf_api_token)
-            audio = client.text_to_speech(text, model="facebook/mms-tts-eng")
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, "wb") as f:
-                f.write(audio)
+            audio_bytes = client.text_to_speech(text, model="facebook/mms-tts-eng")
+            if audio_bytes and len(audio_bytes) > 100:
+                with open(output_path, "wb") as f:
+                    f.write(audio_bytes)
+                # Validate it is a real WAV, pad if short
+                try:
+                    _ensure_wav_min_duration(output_path)
+                    print(f"  [Voice Synth] HF TTS OK: {character}")
+                    return output_path
+                except Exception:
+                    pass  # Fall through to gTTS
+        except Exception as e:
+            print(f"  [Voice Synth] HF TTS failed ({e}), trying gTTS...")
+
+        # --- Try 2: gTTS (Google Text-to-Speech, no API key needed) ---
+        try:
+            from gtts import gTTS
+            import io
+            tts = gTTS(text=text, lang='en', slow=False)
+            mp3_buf = io.BytesIO()
+            tts.write_to_fp(mp3_buf)
+            mp3_bytes = mp3_buf.getvalue()
+
+            mp3_path = output_path.replace(".wav", "_tmp.mp3")
+            with open(mp3_path, "wb") as f:
+                f.write(mp3_bytes)
+
+            # Try converting MP3 -> WAV with pydub
+            converted = False
+            try:
+                from pydub import AudioSegment
+                seg = AudioSegment.from_mp3(mp3_path)
+                seg.export(output_path, format="wav")
+                os.remove(mp3_path)
+                converted = True
+            except Exception:
+                pass
+
+            if not converted:
+                # Keep as .mp3 — it IS a valid playable audio file
+                final_path = output_path.replace(".wav", ".mp3")
+                os.replace(mp3_path, final_path)
+                output_path = final_path
+                # No WAV padding needed for MP3 — gTTS already generates full-length speech
+                print(f"  [Voice Synth] gTTS MP3 OK ({len(mp3_bytes)//1024}KB): {character}")
+                return output_path
+
+            # If converted to WAV, pad to minimum duration
+            _ensure_wav_min_duration(output_path)
+            print(f"  [Voice Synth] gTTS WAV OK: {character}")
             return output_path
         except Exception as e:
-            print(f"  [Voice Synth] Overloaded/Failed, creating valid silent wav: {e}")
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            import wave
-            with wave.open(output_path, "wb") as f:
-                f.setnchannels(1)
-                f.setsampwidth(2)
-                f.setframerate(44100)
-                f.writeframes(b"\x00" * 44100) # 1 second of silence
-            return output_path
+            print(f"  [Voice Synth] gTTS failed ({e}), generating silence...")
+
+        # --- Fallback: Valid silent WAV at minimum 3 seconds ---
+        rate = 44100
+        duration_secs = MIN_DURATION_SECS
+        with wave.open(output_path, "wb") as f:
+            f.setnchannels(1)
+            f.setsampwidth(2)
+            f.setframerate(rate)
+            f.writeframes(b"\x00" * (rate * 2 * duration_secs))  # 16-bit * secs
+        print(f"  [Voice Synth] Silent WAV ({duration_secs}s) for: {character}")
+        return output_path
+
 
     def _query_stock_footage(self, visual_cues: list, output_path: str) -> str:
         """Generate static base image as stock footage via HF."""
